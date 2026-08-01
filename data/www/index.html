@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weather Station</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <header class="hero">
+    <p class="brand">Weather Station</p>
+    <h1 id="heroReading">—</h1>
+    <p class="sub" id="heroSub">Waiting for sensors</p>
+    <div class="cta-row">
+      <span class="pill" id="statusPill">boot</span>
+      <span class="pill muted" id="ipPill">—</span>
+      <span class="pill muted" id="timePill">NTP —</span>
+      <button type="button" class="btn ghost" id="btnSetup">Setup</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="metrics" aria-label="Live readings">
+      <div class="metric"><span class="label">PM2.5</span><strong id="vPm25">—</strong><span class="unit">µg/m³</span></div>
+      <div class="metric"><span class="label">Wind</span><strong id="vWind">—</strong><span class="unit" id="uWind">m/s</span></div>
+      <div class="metric"><span class="label">Dose</span><strong id="vDose">—</strong><span class="unit">µSv/h</span></div>
+      <div class="metric"><span class="label">Pressure</span><strong id="vPressure">—</strong><span class="unit" id="uPressure">hPa</span></div>
+      <div class="metric"><span class="label">Temp</span><strong id="vTemp">—</strong><span class="unit" id="uTemp">°C</span></div>
+      <div class="metric"><span class="label">Humidity</span><strong id="vHum">—</strong><span class="unit">%</span></div>
+    </section>
+
+    <section class="charts" aria-label="History">
+      <h2>Trends</h2>
+      <p class="section-sub" id="chartSub">On-device history, sampled every 15 seconds</p>
+      <div class="chart-wrap"><canvas id="chartMain"></canvas></div>
+    </section>
+
+    <section class="setup" id="setupPanel" hidden>
+      <h2>Setup</h2>
+      <p class="section-sub">WiFi, MQTT / Home Assistant, and sensor calibration</p>
+
+      <form id="setupForm">
+        <fieldset>
+          <legend>WiFi</legend>
+          <label>Network
+            <select id="wifiSsidSelect"></select>
+          </label>
+          <label>Or SSID
+            <input id="wifiSsid" autocomplete="off" />
+          </label>
+          <label>Password
+            <input id="wifiPass" type="password" autocomplete="new-password" />
+          </label>
+          <button type="button" class="btn ghost" id="btnScan">Scan networks</button>
+        </fieldset>
+
+        <fieldset>
+          <legend>Home Assistant (MQTT)</legend>
+          <label class="check"><input type="checkbox" id="mqttEnabled" /> Enable MQTT discovery</label>
+          <label>Broker host <input id="mqttHost" placeholder="192.168.1.10" /></label>
+          <label>Port <input id="mqttPort" type="number" value="1883" /></label>
+          <label>Username <input id="mqttUser" autocomplete="off" /></label>
+          <label>Password <input id="mqttPass" type="password" autocomplete="new-password" /></label>
+          <label>Topic prefix <input id="mqttPrefix" value="weather_station" /></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Time &amp; display units</legend>
+          <label>Timezone (POSIX TZ)
+            <select id="timezone">
+              <option value="&lt;-03&gt;3">Brazil (UTC−3)</option>
+              <option value="UTC0">UTC</option>
+              <option value="EST5EDT,M3.2.0,M11.1.0">US Eastern</option>
+              <option value="PST8PDT,M3.2.0,M11.1.0">US Pacific</option>
+              <option value="GMT0BST,M3.5.0/1,M10.5.0">UK</option>
+              <option value="CET-1CEST,M3.5.0,M10.5.0/3">Central Europe</option>
+            </select>
+          </label>
+          <label>Custom TZ <input id="timezoneCustom" placeholder="e.g. <-03>3" /></label>
+          <label>Wind
+            <select id="windUnit">
+              <option value="mps">m/s</option>
+              <option value="kmh">km/h</option>
+              <option value="mph">mph</option>
+            </select>
+          </label>
+          <label>Temperature
+            <select id="tempUnit">
+              <option value="C">°C</option>
+              <option value="F">°F</option>
+            </select>
+          </label>
+          <label>Pressure
+            <select id="pressureUnit">
+              <option value="hPa">hPa</option>
+              <option value="inHg">inHg</option>
+            </select>
+          </label>
+          <p class="section-sub" id="mdnsHint">Dashboard: http://weather-station.local</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Calibration</legend>
+          <label>Wind m/s per pulse/s <input id="windFactor" type="number" step="0.0001" /></label>
+          <label>Geiger µSv/h per CPM <input id="geigerFactor" type="number" step="0.0001" /></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>OTA update</legend>
+          <p class="section-sub">Upload a PlatformIO <code>firmware.bin</code> or LittleFS image. Device reboots when done. Network OTA also listens as <code>weather-station.local</code>.</p>
+          <label>Type
+            <select id="otaMode">
+              <option value="firmware">Firmware</option>
+              <option value="fs">Filesystem (LittleFS)</option>
+            </select>
+          </label>
+          <label>File <input id="otaFile" type="file" accept=".bin" /></label>
+          <button type="button" class="btn" id="btnOta">Upload &amp; flash</button>
+          <progress id="otaProgress" max="100" value="0" hidden></progress>
+          <p class="form-msg" id="otaMsg"></p>
+        </fieldset>
+
+        <div class="cta-row">
+          <button type="submit" class="btn primary" id="btnSave">Save</button>
+          <button type="button" class="btn" id="btnSaveWifi">Save &amp; connect WiFi</button>
+          <button type="button" class="btn danger" id="btnForget">Forget WiFi</button>
+        </div>
+        <p class="form-msg" id="formMsg"></p>
+      </form>
+    </section>
+  </main>
+
+  <footer>
+    <span id="fwLabel">FW —</span>
+    <span id="uptimeLabel">Uptime —</span>
+  </footer>
+  <script src="/app.js"></script>
+</body>
+</html>
