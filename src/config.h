@@ -3,13 +3,14 @@
 #include <Arduino.h>
 
 // ---- Pins (ESP32-S3 DevKitC-1 defaults) ----
-static constexpr int PIN_SSAP10_RX = 17;  // ESP RX  <- sensor TX
-static constexpr int PIN_SSAP10_TX = 18;  // ESP TX  -> sensor RX
-static constexpr int PIN_ANEMOMETER = 4;
-static constexpr int PIN_GEIGER = 5;
-static constexpr int PIN_BME_SDA = 8;
-static constexpr int PIN_BME_SCL = 9;
-static constexpr int PIN_STATUS_LED = 2;
+static constexpr int PIN_SSAP10_RX = 13;  // ESP RX  <- sensor TX
+static constexpr int PIN_SSAP10_TX = 12;  // ESP TX  -> sensor RX
+static constexpr int PIN_ANEMOMETER = 14;
+static constexpr int PIN_GEIGER = 11;
+static constexpr int PIN_BME_SDA = 5;
+static constexpr int PIN_BME_SCL = 4;
+static constexpr int PIN_STATUS_LED = RGB_BUILTIN;  // onboard WS2812 (GPIO 48 on DevKitC-1)
+static constexpr uint8_t STATUS_LED_BRIGHTNESS = 40;
 
 // ---- Timing ----
 static constexpr uint32_t WIFI_RETRY_MS = 5UL * 60UL * 1000UL;  // 5 minutes

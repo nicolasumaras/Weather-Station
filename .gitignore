@@ -13,6 +13,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Python / PlatformIO venv
+.venv/
+
 # PlatformIO
 .pio/
 .vscode/.browse.c_cpp.db*

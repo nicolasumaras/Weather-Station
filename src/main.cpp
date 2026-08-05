@@ -32,6 +32,26 @@ HistoryBuffer history;
 SensorReadings readings;
 uint32_t bootMs = 0;
 uint32_t lastSensorMs = 0;
+bool bmeOk = false;
+uint8_t ledR = 0, ledG = 0, ledB = 0;
+
+// Red: sensor fault. Green: online. Blue blink: portal / reconnecting.
+void updateStatusLed(bool online) {
+  uint8_t r = 0, g = 0, b = 0;
+  if (!bmeOk) {
+    r = STATUS_LED_BRIGHTNESS;
+  } else if (online) {
+    g = STATUS_LED_BRIGHTNESS;
+  } else if ((millis() / 500) % 2) {
+    b = STATUS_LED_BRIGHTNESS;
+  }
+  if (r != ledR || g != ledG || b != ledB) {
+    ledR = r;
+    ledG = g;
+    ledB = b;
+    neopixelWrite(PIN_STATUS_LED, r, g, b);
+  }
+}
 }
 
 void setup() {
@@ -40,8 +60,7 @@ void setup() {
   Serial.println();
   Serial.printf("[%s] %s boot\n", DEVICE_NAME, FW_VERSION);
 
-  pinMode(PIN_STATUS_LED, OUTPUT);
-  digitalWrite(PIN_STATUS_LED, LOW);
+  neopixelWrite(PIN_STATUS_LED, 0, 0, 0);
 
   settingsLoad(settings);
   bootMs = millis();
@@ -51,7 +70,8 @@ void setup() {
   anemometer.setFactor(settings.windMpsPerPps);
   geiger.begin(PIN_GEIGER);
   geiger.setFactor(settings.geigerUsvPerCpm);
-  if (!bme.begin(PIN_BME_SDA, PIN_BME_SCL)) {
+  bmeOk = bme.begin(PIN_BME_SDA, PIN_BME_SCL);
+  if (!bmeOk) {
     Serial.println("[bme] BME280 not found (check wiring / address)");
   } else {
     Serial.println("[bme] BME280 ready");
@@ -106,11 +126,12 @@ void loop() {
       strftime(readings.localTime, sizeof(readings.localTime), "%Y-%m-%d %H:%M:%S", &ti);
     }
     history.maybeSample(readings);
-    digitalWrite(PIN_STATUS_LED, readings.wifiConnected ? HIGH : ((now / 500) % 2));
   }
 
-  web.loop(readings);
   const bool online = wifi.isStationOnline();
+  updateStatusLed(online);
+
+  web.loop(readings);
   net.loop(online);
   ota.loop(online);
   if (online) {

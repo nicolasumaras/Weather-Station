@@ -18,20 +18,20 @@ Do not feed 5 V UART or open-collector pulled to 5 V into ESP32-S3 pins without 
 |--------|------------|---------------|-------|
 | SSAP10 | VCC | 5 V | Fan draws ~85 mA |
 | SSAP10 | GND | GND | |
-| SSAP10 | TX | **GPIO 17** (RX) | 3.3 V TTL, 9600 8N1 |
-| SSAP10 | RX | **GPIO 18** (TX) | Optional for passive mode |
+| SSAP10 | TX | **GPIO 13** (RX) | 3.3 V TTL, 9600 8N1 |
+| SSAP10 | RX | **GPIO 12** (TX) | Optional for passive mode |
 | SSAP10 | SET / RESET | NC | Internal pull-ups |
 | Anemometer | Brown VCC | 5 V | Confirm your cable colors |
 | Anemometer | Black GND | GND | |
-| Anemometer | Blue NPN out | **GPIO 4** | Open-collector: use ESP pull-up (INPUT_PULLUP). If output swings to 5 V, use a divider |
+| Anemometer | Blue NPN out | **GPIO 14** | Open-collector: use ESP pull-up (INPUT_PULLUP). If output swings to 5 V, use a divider |
 | Geiger kit | VCC | 3.3–5 V per board | HV present on tube terminals — careful |
 | Geiger kit | GND | GND | |
-| Geiger kit | INT / OUT | **GPIO 5** | Active-low pulse, falling edge |
+| Geiger kit | INT / OUT | **GPIO 11** | Active-low pulse, falling edge |
 | BME280 | VCC | 3.3 V | |
 | BME280 | GND | GND | |
-| BME280 | SDA | **GPIO 8** | Address 0x76 or 0x77 |
-| BME280 | SCL | **GPIO 9** | |
-| Status LED | anode via resistor | **GPIO 2** | Optional |
+| BME280 | SDA | **GPIO 5** | Address 0x76 or 0x77 |
+| BME280 | SCL | **GPIO 4** | |
+| Status LED | onboard RGB (WS2812) | **GPIO 48** (`RGB_BUILTIN`) | No wiring needed. Red = sensor fault, green = online, blue blink = setup/reconnect |
 
 ## Sensor notes
 
