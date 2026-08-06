@@ -43,8 +43,13 @@ static constexpr uint32_t SSAP10_BAUD = 9600;
 // ---- MeshCore gateway bridge ----
 static constexpr const char* DEFAULT_MESH_KEYWORD = "weather";
 // Ignore repeat triggers inside this window so a chatty mesh cannot make the
-// station spam the channel (or loop with another automated responder).
-static constexpr uint32_t MESH_REPLY_COOLDOWN_MS = 30000;
+// station spam the channel (or loop with another automated responder). The
+// window is one global setting, but it is enforced per sender: two people
+// asking alternately would otherwise lock each other out.
+static constexpr uint16_t DEFAULT_MESH_COOLDOWN_SEC = 30;
+static constexpr uint16_t MESH_COOLDOWN_MAX_SEC = 3600;
+// Senders tracked for rate limiting; least-recently-heard is evicted.
+static constexpr size_t MESH_SENDER_SLOTS = 8;
 static constexpr uint32_t MESH_HTTP_TIMEOUT_MS = 2500;
 static constexpr size_t MESH_QUEUE_SLOTS = 4;
 static constexpr size_t MESH_REPLY_MAX = 160;  // gateway truncates text at 160

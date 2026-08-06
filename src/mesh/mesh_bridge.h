@@ -21,13 +21,34 @@ struct MeshRequest {
   bool used;
 };
 
+// Why a delivery did or did not produce a reply — the caller logs the reason,
+// so "nothing happened" is never ambiguous.
+enum class MeshAccept {
+  Queued,
+  NotEnabled,
+  NoTrigger,
+  CoolingDown,
+  QueueFull,
+};
+
+struct SenderState {
+  char name[32];
+  uint32_t lastMs;
+  bool used;
+};
+
 class MeshBridge {
  public:
   void begin(StationSettings* settings);
 
-  // Called from the web handler. Returns false if the message was not a
-  // trigger (wrong keyword, disabled, cooling down, queue full).
-  bool enqueue(const char* from, const char* text, bool direct);
+  // Called from the web handler; never blocks.
+  MeshAccept enqueue(const char* from, const char* text, bool direct);
+
+  // Seconds left before this sender may trigger again; 0 when ready.
+  uint32_t cooldownRemaining(const char* from) const;
+  // Same, but resolves the real sender first (public deliveries carry it in
+  // the text rather than the from field).
+  uint32_t cooldownRemainingFor(const char* from, const char* text) const;
 
   // Called from the main loop. Performs at most one HTTP request.
   void loop(const SensorReadings& readings);
@@ -49,6 +70,9 @@ class MeshBridge {
   enum class Stage { Idle, ResolveContact, Send };
 
   bool matchesKeyword(const char* text) const;
+  SenderState* findSender(const char* name);
+  const SenderState* findSender(const char* name) const;
+  SenderState* claimSenderSlot(const char* name);
   size_t buildReply(const SensorReadings& r, char* out, size_t outLen) const;
   bool resolveContactId(const char* name, int* idOut);
   bool postMessage(const char* text, int to);
@@ -61,7 +85,7 @@ class MeshBridge {
   Stage stage_ = Stage::Idle;
   MeshRequest active_{};
   int activeTo_ = -1;
-  uint32_t lastReplyMs_ = 0;
+  SenderState senders_[MESH_SENDER_SLOTS]{};
   uint32_t sent_ = 0;
   uint32_t failed_ = 0;
   uint32_t hooksAccepted_ = 0;

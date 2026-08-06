@@ -56,6 +56,7 @@
     meshAdminPass: $("meshAdminPass"),
     meshHookToken: $("meshHookToken"),
     meshKeyword: $("meshKeyword"),
+    meshCooldown: $("meshCooldown"),
     meshHookUrl: $("meshHookUrl"),
     meshStatus: $("meshStatus"),
     meshLog: $("meshLog"),
@@ -447,6 +448,7 @@
     els.meshEnabled.checked = !!s.mesh_enabled;
     els.meshHost.value = s.mesh_host || "";
     els.meshKeyword.value = s.mesh_keyword || "weather";
+    els.meshCooldown.value = s.mesh_cooldown_s ?? 30;
     // Secrets are never sent back; blank means "leave stored value alone".
     els.meshAdminPass.value = "";
     els.meshHookToken.value = "";
@@ -512,6 +514,7 @@
       mesh_admin_pass: els.meshAdminPass.value,
       mesh_hook_token: els.meshHookToken.value,
       mesh_keyword: els.meshKeyword.value.trim() || "weather",
+      mesh_cooldown_s: Math.max(0, Math.min(3600, Number(els.meshCooldown.value) || 0)),
       apply_wifi: !!applyWifi,
     };
     const res = await fetch("/api/settings", {

@@ -26,7 +26,9 @@ struct StationSettings {
   // the natural thing to paste here and must fit with room for the terminator.
   char meshAdminPass[129] = {0};  // gateway HTTP Basic auth password for user "admin"
   char meshHookToken[129] = {0};  // shared secret the gateway sends as "Authorization: Bearer"
-  char meshKeyword[24] = {0};    // trigger word, matched case-insensitively
+  char meshKeyword[24] = {0};  // trigger word, matched case-insensitively
+  // Per-sender reply window. 0 disables rate limiting entirely.
+  uint16_t meshCooldownSec = DEFAULT_MESH_COOLDOWN_SEC;
 };
 
 bool settingsLoad(StationSettings& out);

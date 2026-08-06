@@ -91,6 +91,10 @@
           <label>Gateway admin password <input id="meshAdminPass" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="unchanged" /></label>
           <label>Webhook token <input id="meshHookToken" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="unchanged" /></label>
           <label>Trigger word <input id="meshKeyword" placeholder="weather" autocapitalize="none" autocorrect="off" spellcheck="false" /></label>
+          <label>Reply cooldown, seconds per sender
+            <input id="meshCooldown" type="number" min="0" max="3600" step="1" inputmode="numeric" />
+          </label>
+          <p class="section-sub">Each sender waits this long between replies. Others are unaffected. 0 disables the limit.</p>
           <p class="section-sub" id="meshStatus">—</p>
           <div class="cta-row">
             <button type="button" class="btn ghost" id="btnMeshLog">Refresh log</button>

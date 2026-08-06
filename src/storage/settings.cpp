@@ -59,6 +59,7 @@ bool settingsLoad(StationSettings& out) {
   prefs.getString("meshAdminPass", out.meshAdminPass, sizeof(out.meshAdminPass));
   prefs.getString("meshHookToken", out.meshHookToken, sizeof(out.meshHookToken));
   prefs.getString("meshKeyword", out.meshKeyword, sizeof(out.meshKeyword));
+  out.meshCooldownSec = prefs.getUShort("meshCooldown", DEFAULT_MESH_COOLDOWN_SEC);
   prefs.end();
   ensureDefaults(out);
   return true;
@@ -87,6 +88,7 @@ bool settingsSave(const StationSettings& in) {
   prefs.putString("meshAdminPass", in.meshAdminPass);
   prefs.putString("meshHookToken", in.meshHookToken);
   prefs.putString("meshKeyword", in.meshKeyword);
+  prefs.putUShort("meshCooldown", in.meshCooldownSec);
   prefs.end();
   return true;
 }

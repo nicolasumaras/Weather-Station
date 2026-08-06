@@ -203,6 +203,7 @@ void WebUi::setupRoutes() {
     doc["mesh_enabled"] = settings_->meshEnabled;
     doc["mesh_host"] = settings_->meshHost;
     doc["mesh_keyword"] = settings_->meshKeyword;
+    doc["mesh_cooldown_s"] = settings_->meshCooldownSec;
     doc["has_mesh_admin_pass"] = settings_->meshAdminPass[0] != '\0';
     doc["has_mesh_hook_token"] = settings_->meshHookToken[0] != '\0';
     doc["mesh_sent"] = mesh_ ? mesh_->repliesSent() : 0;
@@ -309,6 +310,13 @@ void WebUi::setupRoutes() {
     if (doc["mesh_host"].is<const char*>()) {
       fitted &= assignField(settings_->meshHost, sizeof(settings_->meshHost),
                             doc["mesh_host"] | "", "mesh_host");
+    }
+    if (!doc["mesh_cooldown_s"].isNull()) {
+      uint32_t c = doc["mesh_cooldown_s"] | DEFAULT_MESH_COOLDOWN_SEC;
+      if (c > MESH_COOLDOWN_MAX_SEC) {
+        c = MESH_COOLDOWN_MAX_SEC;
+      }
+      settings_->meshCooldownSec = static_cast<uint16_t>(c);
     }
     if (doc["mesh_keyword"].is<const char*>()) {
       fitted &= assignField(settings_->meshKeyword, sizeof(settings_->meshKeyword),
@@ -423,13 +431,40 @@ void WebUi::setupRoutes() {
     const char* text = doc["text"] | "";
     const char* from = doc["from"] | "";
     const bool direct = doc["direct"] | false;
-    const bool queued = mesh_->enqueue(from, text, direct);
-    meshLog.add('<', direct ? "hook direct" : "hook public", 200, "%s: \"%s\"%s", from, text,
-                queued ? " [trigger]" : "");
+    const MeshAccept verdict = mesh_->enqueue(from, text, direct);
+    const char* note = "";
+    switch (verdict) {
+      case MeshAccept::Queued:
+        note = " [trigger]";
+        break;
+      case MeshAccept::CoolingDown:
+        note = " [cooling down]";
+        break;
+      case MeshAccept::QueueFull:
+        note = " [queue full]";
+        break;
+      default:
+        break;
+    }
+    if (verdict == MeshAccept::CoolingDown) {
+      meshLog.add('<', direct ? "hook direct" : "hook public", 200, "%s: \"%s\" [%us left]", from,
+                  text, static_cast<unsigned>(mesh_->cooldownRemainingFor(from, text)));
+    } else {
+      meshLog.add('<', direct ? "hook direct" : "hook public", 200, "%s: \"%s\"%s", from, text,
+                  note);
+    }
+
     // Always 200: a non-match is a normal outcome, not a delivery failure, and
     // the gateway counts non-2xx as failed.
-    req->send(200, "application/json",
-              queued ? "{\"ok\":true,\"queued\":true}" : "{\"ok\":true,\"queued\":false}");
+    JsonDocument out;
+    out["ok"] = true;
+    out["queued"] = verdict == MeshAccept::Queued;
+    if (verdict == MeshAccept::CoolingDown) {
+      out["cooldown_s"] = mesh_->cooldownRemainingFor(from, text);
+    }
+    String body;
+    serializeJson(out, body);
+    req->send(200, "application/json", body);
   };
 
   server.on(
