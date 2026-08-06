@@ -7,7 +7,19 @@
     statusPill: $("statusPill"),
     ipPill: $("ipPill"),
     timePill: $("timePill"),
+    vPm1: $("vPm1"),
     vPm25: $("vPm25"),
+    vPm10: $("vPm10"),
+    qPm1: $("qPm1"),
+    qPm25: $("qPm25"),
+    qPm10: $("qPm10"),
+    qDose: $("qDose"),
+    vAqi: $("vAqi"),
+    qAqi: $("qAqi"),
+    aqiNote: $("aqiNote"),
+    vRadIndex: $("vRadIndex"),
+    qRad: $("qRad"),
+    radNote: $("radNote"),
     vWind: $("vWind"),
     vDose: $("vDose"),
     vPressure: $("vPressure"),
@@ -39,11 +51,20 @@
     tempUnit: $("tempUnit"),
     pressureUnit: $("pressureUnit"),
     mdnsHint: $("mdnsHint"),
+    seriesRow: $("seriesRow"),
     canvas: $("chartMain"),
   };
 
   let history = [];
   let seriesKey = "pm2_5";
+  const SERIES = [
+    { key: "pm2_5", label: "PM2.5" },
+    { key: "usv_h", label: "Dose" },
+    { key: "wind_mps", label: "Wind" },
+    { key: "temperature", label: "Temp" },
+    { key: "humidity", label: "Humidity" },
+    { key: "pressure", label: "Pressure" },
+  ];
   let units = { wind: "mps", temp: "C", pressure: "hPa" };
 
   function fmt(v, digits = 1) {
@@ -98,6 +119,99 @@
     els.uPressure.textContent = pressureLabel();
   }
 
+  // US EPA AQI breakpoints: [Clow, Chigh, Ilow, Ihigh].
+  // PM2.5 uses the 2024 revision; PM10 is unchanged.
+  const AQI_PM25 = [
+    [0.0, 9.0, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150],
+    [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500],
+  ];
+  const AQI_PM10 = [
+    [0, 54, 0, 50], [55, 154, 51, 100], [155, 254, 101, 150],
+    [255, 354, 151, 200], [355, 424, 201, 300], [425, 604, 301, 500],
+  ];
+
+  const AQI_BANDS = [
+    [50, "good", "Good"],
+    [100, "moderate", "Moderate"],
+    [150, "sensitive", "Unhealthy for sensitive groups"],
+    [200, "unhealthy", "Unhealthy"],
+    [300, "very", "Very unhealthy"],
+    [Infinity, "hazardous", "Hazardous"],
+  ];
+
+  // Typical outdoor gamma background. The radiation index is a multiple of this.
+  const BACKGROUND_USV_H = 0.10;
+  const RAD_BANDS = [
+    [1.5, "good", "Normal background"],
+    [3, "moderate", "Slightly elevated"],
+    [10, "sensitive", "Elevated"],
+    [100, "unhealthy", "High"],
+    [Infinity, "hazardous", "Very high"],
+  ];
+
+  const AQI_NOTE =
+    "US EPA AQI. Official breakpoints are defined on 24-hour averages; " +
+    "this is computed from a live reading, so it swings more than a real AQI would.";
+  const RAD_NOTE =
+    `Multiple of typical outdoor background (${BACKGROUND_USV_H} µSv/h). ` +
+    "Short counting windows are statistically noisy — trust the trend, not one sample.";
+
+  function subIndex(c, table) {
+    if (c == null || Number.isNaN(c) || c < 0) return null;
+    for (const [cLo, cHi, iLo, iHi] of table) {
+      if (c <= cHi) return Math.round(((iHi - iLo) / (cHi - cLo)) * (c - cLo) + iLo);
+    }
+    return 500;
+  }
+
+  function band(value, bands) {
+    if (value == null || Number.isNaN(value)) return null;
+    for (const [max, level, label] of bands) {
+      if (value <= max) return { level, label };
+    }
+    return null;
+  }
+
+  function setBadge(el, info, note) {
+    if (!info) {
+      el.textContent = "—";
+      el.dataset.level = "none";
+      el.title = "No reading yet";
+      return;
+    }
+    el.textContent = info.label;
+    el.dataset.level = info.level;
+    el.title = note;
+  }
+
+  function applyIndices(d) {
+    const pmOk = !!d.pm_valid;
+    const i25 = pmOk ? subIndex(d.pm2_5, AQI_PM25) : null;
+    const i10 = pmOk ? subIndex(d.pm10, AQI_PM10) : null;
+
+    setBadge(els.qPm25, band(i25, AQI_BANDS), `PM2.5 sub-index ${i25 ?? "—"}. ${AQI_NOTE}`);
+    setBadge(els.qPm10, band(i10, AQI_BANDS), `PM10 sub-index ${i10 ?? "—"}. ${AQI_NOTE}`);
+    els.qPm1.title = "PM1.0 has no EPA AQI breakpoints; shown as a raw concentration.";
+
+    const aqi = [i25, i10].filter((v) => v != null).length
+      ? Math.max(...[i25, i10].filter((v) => v != null))
+      : null;
+    els.vAqi.textContent = aqi == null ? "—" : String(aqi);
+    setBadge(els.qAqi, band(aqi, AQI_BANDS), AQI_NOTE);
+    const driver = aqi == null ? null : (i25 != null && i25 >= (i10 ?? -1) ? "PM2.5" : "PM10");
+    els.aqiNote.textContent = driver
+      ? `US EPA AQI · driven by ${driver}`
+      : "US EPA AQI · waiting for PM data";
+
+    const dose = d.geiger_valid ? d.usv_h : null;
+    const ratio = dose == null ? null : dose / BACKGROUND_USV_H;
+    els.vRadIndex.textContent = ratio == null ? "—" : `${fmt(ratio, 1)}×`;
+    setBadge(els.qRad, band(ratio, RAD_BANDS), RAD_NOTE);
+    els.radNote.textContent = dose == null
+      ? "Waiting for first 10 s counting window"
+      : `${fmt(dose, 3)} µSv/h · ≈ ${fmt(dose * 8.766, 2)} mSv/year`;
+  }
+
   function applyStatus(d) {
     applyUnitsFromStatus(d);
     const pm = d.pm_valid ? d.pm2_5 : null;
@@ -117,9 +231,13 @@
     els.ipPill.title = mdns;
     els.timePill.textContent = d.ntp && d.local_time ? d.local_time : (d.ntp ? "NTP ok" : "NTP —");
 
+    els.vPm1.textContent = fmt(d.pm1_0, 0);
     els.vPm25.textContent = fmt(d.pm2_5, 0);
+    els.vPm10.textContent = fmt(d.pm10, 0);
     els.vWind.textContent = fmt(w, units.wind === "mps" ? 2 : 1);
     els.vDose.textContent = fmt(d.usv_h, 3);
+    setBadge(els.qDose, band(d.geiger_valid ? d.usv_h / BACKGROUND_USV_H : null, RAD_BANDS), RAD_NOTE);
+    applyIndices(d);
     els.vPressure.textContent = fmt(pressureFromHpa(d.pressure), units.pressure === "inHg" ? 2 : 1);
     els.vTemp.textContent = fmt(t, 1);
     els.vHum.textContent = fmt(d.humidity, 0);
@@ -170,7 +288,8 @@
 
     ctx.fillStyle = "rgba(232,241,244,0.55)";
     ctx.font = "12px 'Segoe UI', sans-serif";
-    ctx.fillText("PM2.5 · wind · dose · pressure · temp · humidity (tap to focus)", 12, 18);
+    const active = SERIES.find((s) => s.key === seriesKey);
+    ctx.fillText(active ? active.label : "", 12, 18);
 
     const pad = { l: 36, r: 12, t: 28, b: 28 };
     const plotW = w - pad.l - pad.r;
@@ -332,8 +451,17 @@
   }
 
   els.btnSetup.addEventListener("click", () => {
-    els.setupPanel.hidden = !els.setupPanel.hidden;
-    if (!els.setupPanel.hidden) loadSettings();
+    const opening = els.setupPanel.hidden;
+    els.setupPanel.hidden = !opening;
+    els.btnSetup.setAttribute("aria-expanded", String(opening));
+    els.btnSetup.textContent = opening ? "Close setup" : "Setup";
+    if (opening) {
+      loadSettings();
+      // On a phone the panel opens well below the fold — take the user there.
+      els.setupPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   });
   els.wifiSsidSelect.addEventListener("change", () => {
     els.wifiSsid.value = els.wifiSsidSelect.value;
@@ -396,9 +524,37 @@
     xhr.send(form);
   });
 
+  function syncSeriesChips() {
+    for (const btn of els.seriesRow.children) {
+      btn.setAttribute("aria-pressed", String(btn.dataset.key === seriesKey));
+    }
+  }
+
+  function buildSeriesChips() {
+    els.seriesRow.replaceChildren();
+    for (const s of SERIES) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip";
+      btn.dataset.key = s.key;
+      btn.textContent = s.label;
+      btn.setAttribute("aria-pressed", String(s.key === seriesKey));
+      btn.addEventListener("click", () => {
+        seriesKey = s.key;
+        syncSeriesChips();
+        drawChart();
+      });
+      els.seriesRow.appendChild(btn);
+    }
+  }
+
+  buildSeriesChips();
+
+  // Tapping the chart still cycles, for anyone used to the old behaviour.
   els.canvas.addEventListener("click", () => {
-    const keys = ["pm2_5", "wind_mps", "usv_h", "pressure", "temperature", "humidity"];
-    seriesKey = keys[(keys.indexOf(seriesKey) + 1) % keys.length];
+    const i = SERIES.findIndex((s) => s.key === seriesKey);
+    seriesKey = SERIES[(i + 1) % SERIES.length].key;
+    syncSeriesChips();
     drawChart();
   });
   window.addEventListener("resize", drawChart);
