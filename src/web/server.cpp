@@ -136,7 +136,11 @@ void WebUi::setupRoutes() {
       req->send(500, "application/json", "{\"error\":\"no history\"}");
       return;
     }
-    HistorySample buf[HISTORY_CAPACITY];
+    // Must not live on the stack: the async_tcp task gets 16 KB
+    // (CONFIG_ASYNC_TCP_STACK_SIZE) and this snapshot is 720 * 32 = 22.5 KB,
+    // which overflowed it and rebooted the device on every request.
+    // Request handlers all run on that one task, so a shared buffer is safe.
+    static HistorySample buf[HISTORY_CAPACITY];
     size_t n = history_->copyChronological(buf, HISTORY_CAPACITY);
     JsonDocument doc;
     doc["unix"] = (n > 0) ? buf[n - 1].unix : false;
@@ -152,9 +156,12 @@ void WebUi::setupRoutes() {
       if (!isnan(buf[i].temperatureC)) o["temperature"] = buf[i].temperatureC;
       if (!isnan(buf[i].humidityPct)) o["humidity"] = buf[i].humidityPct;
     }
-    String out;
-    serializeJson(doc, out);
-    req->send(200, "application/json", out);
+    // Stream straight out instead of building the whole payload in a String
+    // and letting the server copy it again — with 720 samples that doubled
+    // an already large allocation.
+    AsyncResponseStream* res = req->beginResponseStream("application/json");
+    serializeJson(doc, *res);
+    req->send(res);
   });
 
   server.on("/api/settings", HTTP_GET, [this](AsyncWebServerRequest* req) {
