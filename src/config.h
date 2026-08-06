@@ -39,3 +39,12 @@ static constexpr const char* DEFAULT_PRESSURE_UNIT = "hPa";  // hPa | inHg
 
 // ---- UART ----
 static constexpr uint32_t SSAP10_BAUD = 9600;
+
+// ---- MeshCore gateway bridge ----
+static constexpr const char* DEFAULT_MESH_KEYWORD = "weather";
+// Ignore repeat triggers inside this window so a chatty mesh cannot make the
+// station spam the channel (or loop with another automated responder).
+static constexpr uint32_t MESH_REPLY_COOLDOWN_MS = 30000;
+static constexpr uint32_t MESH_HTTP_TIMEOUT_MS = 2500;
+static constexpr size_t MESH_QUEUE_SLOTS = 4;
+static constexpr size_t MESH_REPLY_MAX = 160;  // gateway truncates text at 160

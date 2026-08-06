@@ -4,6 +4,7 @@
 #include <ctime>
 
 #include "config.h"
+#include "mesh/mesh_bridge.h"
 #include "mqtt/ha_discovery.h"
 #include "net_services.h"
 #include "ota_update.h"
@@ -29,6 +30,7 @@ AnemometerSensor anemometer;
 GeigerSensor geiger;
 Bme280Sensor bme;
 HistoryBuffer history;
+MeshBridge mesh;
 SensorReadings readings;
 uint32_t bootMs = 0;
 uint32_t lastSensorMs = 0;
@@ -81,7 +83,8 @@ void setup() {
   net.begin(&settings);
   haMqtt.begin(&settings);
   ota.begin();
-  web.begin(&settings, &wifi, &history, &haMqtt, &net);
+  mesh.begin(&settings);
+  web.begin(&settings, &wifi, &history, &haMqtt, &net, &mesh);
 }
 
 void loop() {
@@ -134,6 +137,7 @@ void loop() {
   web.loop(readings);
   net.loop(online);
   ota.loop(online);
+  mesh.loop(readings);
   if (online) {
     haMqtt.loop(readings);
   }

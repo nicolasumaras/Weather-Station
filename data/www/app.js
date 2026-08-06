@@ -51,6 +51,13 @@
     tempUnit: $("tempUnit"),
     pressureUnit: $("pressureUnit"),
     mdnsHint: $("mdnsHint"),
+    meshEnabled: $("meshEnabled"),
+    meshHost: $("meshHost"),
+    meshAdminPass: $("meshAdminPass"),
+    meshHookToken: $("meshHookToken"),
+    meshKeyword: $("meshKeyword"),
+    meshHookUrl: $("meshHookUrl"),
+    meshStatus: $("meshStatus"),
     seriesRow: $("seriesRow"),
     canvas: $("chartMain"),
   };
@@ -376,6 +383,23 @@
     } else {
       els.timezoneCustom.value = tz;
     }
+    els.meshEnabled.checked = !!s.mesh_enabled;
+    els.meshHost.value = s.mesh_host || "";
+    els.meshKeyword.value = s.mesh_keyword || "weather";
+    // Secrets are never sent back; blank means "leave stored value alone".
+    els.meshAdminPass.value = "";
+    els.meshHookToken.value = "";
+    els.meshAdminPass.placeholder = s.has_mesh_admin_pass ? "stored — leave blank to keep" : "required";
+    els.meshHookToken.placeholder = s.has_mesh_hook_token ? "stored — leave blank to keep" : "required";
+    if (s.mdns) {
+      els.meshHookUrl.textContent = `${s.mdns}/api/mesh-hook`;
+    }
+    const meshBits = [];
+    if (s.mesh_sent != null) meshBits.push(`${s.mesh_sent} replies sent`);
+    if (s.mesh_failed) meshBits.push(`${s.mesh_failed} failed`);
+    if (s.mesh_last_error) meshBits.push(s.mesh_last_error);
+    els.meshStatus.textContent = meshBits.length ? meshBits.join(" · ") : "No replies yet";
+
     if (s.mdns) els.mdnsHint.textContent = `Dashboard: ${s.mdns}`;
     units = {
       wind: s.wind_unit || "mps",
@@ -415,6 +439,11 @@
       wind_unit: els.windUnit.value,
       temp_unit: els.tempUnit.value,
       pressure_unit: els.pressureUnit.value,
+      mesh_enabled: els.meshEnabled.checked,
+      mesh_host: els.meshHost.value.trim(),
+      mesh_admin_pass: els.meshAdminPass.value,
+      mesh_hook_token: els.meshHookToken.value,
+      mesh_keyword: els.meshKeyword.value.trim() || "weather",
       apply_wifi: !!applyWifi,
     };
     const res = await fetch("/api/settings", {

@@ -84,6 +84,17 @@
         </fieldset>
 
         <fieldset>
+          <legend>MeshCore gateway</legend>
+          <p class="section-sub">Replies to mesh messages containing the trigger word with current conditions. Point the gateway's webhook at <code id="meshHookUrl">http://weather-station.local/api/mesh-hook</code>.</p>
+          <label class="check"><input type="checkbox" id="meshEnabled" /> Enable mesh replies</label>
+          <label>Gateway host <input id="meshHost" placeholder="192.168.15.66" inputmode="url" autocapitalize="none" autocorrect="off" spellcheck="false" /></label>
+          <label>Gateway admin password <input id="meshAdminPass" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="unchanged" /></label>
+          <label>Webhook token <input id="meshHookToken" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="unchanged" /></label>
+          <label>Trigger word <input id="meshKeyword" placeholder="weather" autocapitalize="none" autocorrect="off" spellcheck="false" /></label>
+          <p class="section-sub" id="meshStatus">—</p>
+        </fieldset>
+
+        <fieldset>
           <legend>Time &amp; display units</legend>
           <label>Timezone (POSIX TZ)
             <select id="timezone">

@@ -18,6 +18,13 @@ struct StationSettings {
   char windUnit[8] = {0};      // mps | kmh | mph
   char tempUnit[4] = {0};      // C | F
   char pressureUnit[8] = {0};  // hPa | inHg
+
+  // MeshCore gateway bridge (rak3112-meshcore-mqtt-gateway)
+  bool meshEnabled = false;
+  char meshHost[64] = {0};       // gateway IP or hostname, no scheme
+  char meshAdminPass[64] = {0};  // gateway HTTP Basic auth password for user "admin"
+  char meshHookToken[64] = {0};  // shared secret the gateway sends as "Authorization: Bearer"
+  char meshKeyword[24] = {0};    // trigger word, matched case-insensitively
 };
 
 bool settingsLoad(StationSettings& out);

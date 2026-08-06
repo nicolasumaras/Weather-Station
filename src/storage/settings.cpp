@@ -23,6 +23,9 @@ void ensureDefaults(StationSettings& out) {
   if (out.pressureUnit[0] == '\0') {
     strncpy(out.pressureUnit, DEFAULT_PRESSURE_UNIT, sizeof(out.pressureUnit) - 1);
   }
+  if (out.meshKeyword[0] == '\0') {
+    strncpy(out.meshKeyword, DEFAULT_MESH_KEYWORD, sizeof(out.meshKeyword) - 1);
+  }
 }
 }
 
@@ -51,6 +54,11 @@ bool settingsLoad(StationSettings& out) {
   prefs.getString("windUnit", out.windUnit, sizeof(out.windUnit));
   prefs.getString("tempUnit", out.tempUnit, sizeof(out.tempUnit));
   prefs.getString("pressureUnit", out.pressureUnit, sizeof(out.pressureUnit));
+  out.meshEnabled = prefs.getBool("meshEnabled", false);
+  prefs.getString("meshHost", out.meshHost, sizeof(out.meshHost));
+  prefs.getString("meshAdminPass", out.meshAdminPass, sizeof(out.meshAdminPass));
+  prefs.getString("meshHookToken", out.meshHookToken, sizeof(out.meshHookToken));
+  prefs.getString("meshKeyword", out.meshKeyword, sizeof(out.meshKeyword));
   prefs.end();
   ensureDefaults(out);
   return true;
@@ -74,6 +82,11 @@ bool settingsSave(const StationSettings& in) {
   prefs.putString("windUnit", in.windUnit);
   prefs.putString("tempUnit", in.tempUnit);
   prefs.putString("pressureUnit", in.pressureUnit);
+  prefs.putBool("meshEnabled", in.meshEnabled);
+  prefs.putString("meshHost", in.meshHost);
+  prefs.putString("meshAdminPass", in.meshAdminPass);
+  prefs.putString("meshHookToken", in.meshHookToken);
+  prefs.putString("meshKeyword", in.meshKeyword);
   prefs.end();
   return true;
 }

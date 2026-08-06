@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 
+#include "../mesh/mesh_bridge.h"
 #include "../mqtt/ha_discovery.h"
 #include "../net_services.h"
 #include "../sensors/history.h"
@@ -12,7 +13,7 @@
 class WebUi {
  public:
   void begin(StationSettings* settings, WifiPortal* wifi, HistoryBuffer* history, HaMqtt* mqtt,
-             NetServices* net);
+             NetServices* net, MeshBridge* mesh);
   void loop(const SensorReadings& readings);
   void notifyClients(const SensorReadings& readings);
 
@@ -22,6 +23,7 @@ class WebUi {
   HistoryBuffer* history_ = nullptr;
   HaMqtt* mqtt_ = nullptr;
   NetServices* net_ = nullptr;
+  MeshBridge* mesh_ = nullptr;
   SensorReadings last_{};
   uint32_t lastWsMs_ = 0;
 

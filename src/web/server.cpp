@@ -17,6 +17,7 @@ AsyncWebSocket ws("/ws");
 DNSServer dnsServer;
 bool dnsActive = false;
 String settingsBody;
+String meshBody;
 
 void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type,
                void* arg, uint8_t* data, size_t len) {
@@ -31,12 +32,13 @@ void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventTyp
 }
 
 void WebUi::begin(StationSettings* settings, WifiPortal* wifi, HistoryBuffer* history, HaMqtt* mqtt,
-                  NetServices* net) {
+                  NetServices* net, MeshBridge* mesh) {
   settings_ = settings;
   wifi_ = wifi;
   history_ = history;
   mqtt_ = mqtt;
   net_ = net;
+  mesh_ = mesh;
 
   if (!LittleFS.begin(true)) {
     Serial.println("[fs] LittleFS mount failed");
@@ -182,6 +184,14 @@ void WebUi::setupRoutes() {
     doc["pressure_unit"] = settings_->pressureUnit;
     doc["mdns"] = String("http://") + MDNS_HOSTNAME + ".local";
     doc["ntp"] = net_ && net_->timeSynced();
+    doc["mesh_enabled"] = settings_->meshEnabled;
+    doc["mesh_host"] = settings_->meshHost;
+    doc["mesh_keyword"] = settings_->meshKeyword;
+    doc["has_mesh_admin_pass"] = settings_->meshAdminPass[0] != '\0';
+    doc["has_mesh_hook_token"] = settings_->meshHookToken[0] != '\0';
+    doc["mesh_sent"] = mesh_ ? mesh_->repliesSent() : 0;
+    doc["mesh_failed"] = mesh_ ? mesh_->failures() : 0;
+    doc["mesh_last_error"] = mesh_ ? mesh_->lastError() : "";
     String out;
     serializeJson(doc, out);
     req->send(200, "application/json", out);
@@ -273,6 +283,29 @@ void WebUi::setupRoutes() {
       strncpy(settings_->pressureUnit, doc["pressure_unit"] | DEFAULT_PRESSURE_UNIT,
               sizeof(settings_->pressureUnit) - 1);
     }
+    if (!doc["mesh_enabled"].isNull()) {
+      settings_->meshEnabled = doc["mesh_enabled"].as<bool>();
+    }
+    if (doc["mesh_host"].is<const char*>()) {
+      strncpy(settings_->meshHost, doc["mesh_host"] | "", sizeof(settings_->meshHost) - 1);
+    }
+    if (doc["mesh_keyword"].is<const char*>()) {
+      strncpy(settings_->meshKeyword, doc["mesh_keyword"] | DEFAULT_MESH_KEYWORD,
+              sizeof(settings_->meshKeyword) - 1);
+    }
+    // Secrets follow the wifi_pass convention: blank means "keep what's stored".
+    if (doc["mesh_admin_pass"].is<const char*>()) {
+      const char* p = doc["mesh_admin_pass"] | "";
+      if (p[0] != '\0') {
+        strncpy(settings_->meshAdminPass, p, sizeof(settings_->meshAdminPass) - 1);
+      }
+    }
+    if (doc["mesh_hook_token"].is<const char*>()) {
+      const char* t = doc["mesh_hook_token"] | "";
+      if (t[0] != '\0') {
+        strncpy(settings_->meshHookToken, t, sizeof(settings_->meshHookToken) - 1);
+      }
+    }
 
     settingsSave(*settings_);
     if (net_) {
@@ -291,6 +324,61 @@ void WebUi::setupRoutes() {
       [](AsyncWebServerRequest* req) { (void)req; }, nullptr,
       [handleSettingsPost](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index,
                            size_t total) { handleSettingsPost(req, data, len, index, total); });
+
+  // Inbound webhook from the MeshCore gateway. Runs on the async_tcp task, so
+  // it only parses and queues — the reply is sent later from the main loop.
+  auto handleMeshHook = [this](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index,
+                               size_t total) {
+    if (index == 0) {
+      meshBody = "";
+      meshBody.reserve(total);
+    }
+    meshBody.concat(reinterpret_cast<const char*>(data), len);
+    if (index + len < total) {
+      return;
+    }
+
+    if (!mesh_ || !mesh_->enabled()) {
+      req->send(503, "application/json", "{\"ok\":false,\"error\":\"mesh bridge disabled\"}");
+      return;
+    }
+
+    // Shared secret must match, and must be configured — an empty token would
+    // otherwise leave the endpoint open to anything on the LAN.
+    const char* expected = settings_->meshHookToken;
+    if (expected[0] == '\0') {
+      req->send(403, "application/json", "{\"ok\":false,\"error\":\"no token configured\"}");
+      return;
+    }
+    String presented;
+    if (req->hasHeader("Authorization")) {
+      presented = req->header("Authorization");
+    }
+    if (!presented.startsWith("Bearer ") || presented.substring(7) != expected) {
+      req->send(401, "application/json", "{\"ok\":false,\"error\":\"bad token\"}");
+      return;
+    }
+
+    JsonDocument doc;
+    if (deserializeJson(doc, meshBody)) {
+      req->send(400, "application/json", "{\"ok\":false,\"error\":\"bad json\"}");
+      return;
+    }
+
+    const char* text = doc["text"] | "";
+    const char* from = doc["from"] | "";
+    const bool direct = doc["direct"] | false;
+    const bool queued = mesh_->enqueue(from, text, direct);
+    // Always 200: a non-match is a normal outcome, not a delivery failure, and
+    // the gateway counts non-2xx as failed.
+    req->send(200, "application/json",
+              queued ? "{\"ok\":true,\"queued\":true}" : "{\"ok\":true,\"queued\":false}");
+  };
+
+  server.on(
+      "/api/mesh-hook", HTTP_POST, [](AsyncWebServerRequest* req) { (void)req; }, nullptr,
+      [handleMeshHook](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index,
+                       size_t total) { handleMeshHook(req, data, len, index, total); });
 
   server.on("/api/forget-wifi", HTTP_POST, [this](AsyncWebServerRequest* req) {
     req->send(200, "application/json", "{\"ok\":true}");
