@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "../sensors/aqi.h"
+#include "event_log.h"
 
 namespace {
 
@@ -138,6 +139,7 @@ bool MeshBridge::resolveContactId(const char* name, int* idOut) {
   const int code = http.GET();
   if (code != 200) {
     snprintf(lastError_, sizeof(lastError_), "contacts: HTTP %d", code);
+    meshLog.add('>', "GET /api/contacts", code, "lookup for \"%s\" failed", name);
     http.end();
     return false;
   }
@@ -154,10 +156,12 @@ bool MeshBridge::resolveContactId(const char* name, int* idOut) {
     const char* cname = c["name"] | "";
     if (strcmp(cname, name) == 0) {
       *idOut = c["id"] | -1;
+      meshLog.add('>', "GET /api/contacts", 200, "\"%s\" -> id %d", name, *idOut);
       return *idOut >= 0;
     }
   }
   strncpy(lastError_, "contacts: sender not known", sizeof(lastError_) - 1);
+  meshLog.add('>', "GET /api/contacts", 200, "\"%s\" not in contact list", name);
   return false;
 }
 
@@ -182,8 +186,10 @@ bool MeshBridge::postMessage(const char* text, int to) {
   http.end();
   if (code < 200 || code >= 300) {
     snprintf(lastError_, sizeof(lastError_), "send: HTTP %d", code);
+    meshLog.add('>', "POST /api/messages", code, "to=%d failed", to);
     return false;
   }
+  meshLog.add('>', "POST /api/messages", code, "to=%d \"%s\"", to, text);
   return true;
 }
 

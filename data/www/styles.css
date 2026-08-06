@@ -273,6 +273,37 @@ footer {
   border-top: 1px solid var(--line);
 }
 
+/* Wide rows scroll inside their own box rather than widening the page. */
+.log-wrap {
+  max-height: 16rem;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 0.75rem;
+}
+.log {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.log td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  white-space: nowrap;
+}
+.log td.detail {
+  white-space: normal;
+  word-break: break-word;
+  color: var(--muted);
+}
+.log tr:last-child td { border-bottom: none; }
+.log .dir-in { color: var(--accent); }
+.log .dir-out { color: #f5c451; }
+.log .code-bad { color: #ff8fa3; }
+.log .empty { color: var(--muted); font-style: italic; white-space: normal; }
+
 .series-row {
   display: flex;
   flex-wrap: wrap;

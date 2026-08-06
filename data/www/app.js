@@ -58,6 +58,9 @@
     meshKeyword: $("meshKeyword"),
     meshHookUrl: $("meshHookUrl"),
     meshStatus: $("meshStatus"),
+    meshLog: $("meshLog"),
+    btnMeshLog: $("btnMeshLog"),
+    btnMeshLogClear: $("btnMeshLogClear"),
     seriesRow: $("seriesRow"),
     canvas: $("chartMain"),
   };
@@ -361,6 +364,64 @@
     return custom || els.timezone.value || "<-03>3";
   }
 
+  function logTime(ev) {
+    if (ev.ts) {
+      return new Date(ev.ts * 1000).toLocaleTimeString();
+    }
+    // No NTP yet — fall back to uptime, which is still enough to order events.
+    const h = Math.floor(ev.up / 3600);
+    const m = Math.floor((ev.up % 3600) / 60);
+    const s = ev.up % 60;
+    return `+${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+
+  async function loadMeshLog() {
+    const body = els.meshLog.tBodies[0];
+    body.replaceChildren();
+    let data;
+    try {
+      const res = await fetch("/api/mesh-log");
+      data = await res.json();
+    } catch (e) {
+      const tr = body.insertRow();
+      tr.insertCell().outerHTML = `<td class="empty" colspan="4">Could not read log: ${e}</td>`;
+      return;
+    }
+
+    const events = data.events || [];
+    if (!events.length) {
+      const tr = body.insertRow();
+      tr.insertCell().outerHTML = '<td class="empty" colspan="4">No exchanges recorded yet</td>';
+      return;
+    }
+
+    for (const ev of events) {
+      const tr = body.insertRow();
+      const t = tr.insertCell();
+      t.textContent = logTime(ev);
+
+      const d = tr.insertCell();
+      d.textContent = ev.dir === "<" ? "in" : "out";
+      d.className = ev.dir === "<" ? "dir-in" : "dir-out";
+
+      const w = tr.insertCell();
+      w.textContent = ev.code ? `${ev.what} ${ev.code}` : ev.what;
+      if (ev.code && (ev.code < 200 || ev.code >= 300)) {
+        w.className = "code-bad";
+      }
+
+      const det = tr.insertCell();
+      det.className = "detail";
+      det.textContent = ev.detail || "";
+    }
+
+    if (data.dropped) {
+      const tr = body.insertRow();
+      tr.insertCell().outerHTML =
+        `<td class="empty" colspan="4">${data.dropped} older entries dropped</td>`;
+    }
+  }
+
   async function loadSettings() {
     const res = await fetch("/api/settings");
     const s = await res.json();
@@ -405,6 +466,7 @@
     if (s.mesh_failed) meshBits.push(`${s.mesh_failed} failed`);
     if (s.mesh_last_error) meshBits.push(s.mesh_last_error);
     els.meshStatus.textContent = meshBits.join(" · ");
+    loadMeshLog();
 
     if (s.mdns) els.mdnsHint.textContent = `Dashboard: ${s.mdns}`;
     units = {
@@ -498,6 +560,12 @@
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   });
+  els.btnMeshLog.addEventListener("click", () => loadMeshLog());
+  els.btnMeshLogClear.addEventListener("click", async () => {
+    await fetch("/api/mesh-log", { method: "DELETE" }).catch(() => {});
+    loadMeshLog();
+  });
+
   els.wifiSsidSelect.addEventListener("change", () => {
     els.wifiSsid.value = els.wifiSsidSelect.value;
   });

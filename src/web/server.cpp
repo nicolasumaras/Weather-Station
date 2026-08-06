@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "../config.h"
+#include "../mesh/event_log.h"
 
 namespace {
 AsyncWebServer server(80);
@@ -368,6 +369,7 @@ void WebUi::setupRoutes() {
 
     if (!mesh_ || !mesh_->inboundEnabled()) {
       Serial.println("[mesh] hook rejected: bridge not enabled in settings");
+      meshLog.add('<', "hook", 503, "bridge not enabled in settings");
       if (mesh_) mesh_->noteRejected();
       req->send(503, "application/json",
                 "{\"ok\":false,\"error\":\"mesh bridge not enabled in settings\"}");
@@ -379,6 +381,7 @@ void WebUi::setupRoutes() {
     const char* expected = settings_->meshHookToken;
     if (expected[0] == '\0') {
       Serial.println("[mesh] hook rejected: no webhook token configured");
+      meshLog.add('<', "hook", 403, "no webhook token configured");
       mesh_->noteRejected();
       req->send(403, "application/json", "{\"ok\":false,\"error\":\"no webhook token configured\"}");
       return;
@@ -389,12 +392,15 @@ void WebUi::setupRoutes() {
     }
     if (!presented.startsWith("Bearer ")) {
       Serial.println("[mesh] hook rejected: missing or malformed Authorization header");
+      meshLog.add('<', "hook", 401, "missing/malformed Authorization header");
       mesh_->noteRejected();
       req->send(401, "application/json", "{\"ok\":false,\"error\":\"missing bearer token\"}");
       return;
     }
     const String token = presented.substring(7);
     if (token != expected) {
+      meshLog.add('<', "hook", 401, "token mismatch: sent %u chars, stored %u",
+                  static_cast<unsigned>(token.length()), static_cast<unsigned>(strlen(expected)));
       // Lengths alone are enough to spot a truncation mismatch without
       // putting either secret on the console.
       Serial.printf("[mesh] hook rejected: token mismatch (presented %u chars, stored %u)\n",
@@ -407,6 +413,9 @@ void WebUi::setupRoutes() {
 
     JsonDocument doc;
     if (deserializeJson(doc, meshBody)) {
+      meshLog.add('<', "hook", 400, "bad json (%u bytes)",
+                  static_cast<unsigned>(meshBody.length()));
+      mesh_->noteRejected();
       req->send(400, "application/json", "{\"ok\":false,\"error\":\"bad json\"}");
       return;
     }
@@ -415,6 +424,8 @@ void WebUi::setupRoutes() {
     const char* from = doc["from"] | "";
     const bool direct = doc["direct"] | false;
     const bool queued = mesh_->enqueue(from, text, direct);
+    meshLog.add('<', direct ? "hook direct" : "hook public", 200, "%s: \"%s\"%s", from, text,
+                queued ? " [trigger]" : "");
     // Always 200: a non-match is a normal outcome, not a delivery failure, and
     // the gateway counts non-2xx as failed.
     req->send(200, "application/json",
@@ -425,6 +436,39 @@ void WebUi::setupRoutes() {
       "/api/mesh-hook", HTTP_POST, [](AsyncWebServerRequest* req) { (void)req; }, nullptr,
       [handleMeshHook](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index,
                        size_t total) { handleMeshHook(req, data, len, index, total); });
+
+  server.on("/api/mesh-log", HTTP_GET, [](AsyncWebServerRequest* req) {
+    // Copy one entry at a time out of the static ring: 50 of them at once
+    // would be ~5 KB on a stack that only has 16 KB.
+    AsyncResponseStream* res = req->beginResponseStream("application/json");
+    res->print("{\"dropped\":");
+    res->print(meshLog.dropped());
+    res->print(",\"events\":[");
+    MeshEvent e;
+    for (size_t i = 0; i < meshLog.size(); ++i) {
+      if (!meshLog.get(i, &e)) {
+        break;
+      }
+      JsonDocument doc;
+      doc["ts"] = e.unixTs;
+      doc["up"] = e.uptimeS;
+      doc["dir"] = String(e.dir);
+      doc["what"] = e.what;
+      doc["code"] = e.code;
+      doc["detail"] = e.detail;
+      if (i) {
+        res->print(',');
+      }
+      serializeJson(doc, *res);
+    }
+    res->print("]}");
+    req->send(res);
+  });
+
+  server.on("/api/mesh-log", HTTP_DELETE, [](AsyncWebServerRequest* req) {
+    meshLog.clear();
+    req->send(200, "application/json", "{\"ok\":true}");
+  });
 
   server.on("/api/forget-wifi", HTTP_POST, [this](AsyncWebServerRequest* req) {
     req->send(200, "application/json", "{\"ok\":true}");

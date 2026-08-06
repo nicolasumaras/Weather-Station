@@ -92,6 +92,12 @@
           <label>Webhook token <input id="meshHookToken" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="unchanged" /></label>
           <label>Trigger word <input id="meshKeyword" placeholder="weather" autocapitalize="none" autocorrect="off" spellcheck="false" /></label>
           <p class="section-sub" id="meshStatus">—</p>
+          <div class="cta-row">
+            <button type="button" class="btn ghost" id="btnMeshLog">Refresh log</button>
+            <button type="button" class="btn ghost" id="btnMeshLogClear">Clear log</button>
+          </div>
+          <p class="section-sub">Last 50 exchanges, held in RAM only — cleared on reboot.</p>
+          <div class="log-wrap"><table class="log" id="meshLog"><tbody></tbody></table></div>
         </fieldset>
 
         <fieldset>
