@@ -32,9 +32,17 @@ class MeshBridge {
   // Called from the main loop. Performs at most one HTTP request.
   void loop(const SensorReadings& readings);
 
-  bool enabled() const;
+  // Accepting a delivery only needs the bridge switched on. Replying also
+  // needs somewhere to send it — keep the two separate so a missing gateway
+  // host does not make inbound deliveries look rejected.
+  bool inboundEnabled() const;
+  bool canReply() const;
+
   uint32_t repliesSent() const { return sent_; }
   uint32_t failures() const { return failed_; }
+  uint32_t hooksAccepted() const { return hooksAccepted_; }
+  uint32_t hooksRejected() const { return hooksRejected_; }
+  void noteRejected() { hooksRejected_++; }
   const char* lastError() const { return lastError_; }
 
  private:
@@ -56,5 +64,7 @@ class MeshBridge {
   uint32_t lastReplyMs_ = 0;
   uint32_t sent_ = 0;
   uint32_t failed_ = 0;
+  uint32_t hooksAccepted_ = 0;
+  uint32_t hooksRejected_ = 0;
   char lastError_[64] = {0};
 };

@@ -21,9 +21,11 @@ struct StationSettings {
 
   // MeshCore gateway bridge (rak3112-meshcore-mqtt-gateway)
   bool meshEnabled = false;
-  char meshHost[64] = {0};       // gateway IP or hostname, no scheme
-  char meshAdminPass[64] = {0};  // gateway HTTP Basic auth password for user "admin"
-  char meshHookToken[64] = {0};  // shared secret the gateway sends as "Authorization: Bearer"
+  char meshHost[64] = {0};  // gateway IP or hostname, no scheme
+  // Sized for generated secrets, not typed passwords: a 64-hex-char token is
+  // the natural thing to paste here and must fit with room for the terminator.
+  char meshAdminPass[129] = {0};  // gateway HTTP Basic auth password for user "admin"
+  char meshHookToken[129] = {0};  // shared secret the gateway sends as "Authorization: Bearer"
   char meshKeyword[24] = {0};    // trigger word, matched case-insensitively
 };
 

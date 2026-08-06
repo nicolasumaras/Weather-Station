@@ -389,16 +389,22 @@
     // Secrets are never sent back; blank means "leave stored value alone".
     els.meshAdminPass.value = "";
     els.meshHookToken.value = "";
-    els.meshAdminPass.placeholder = s.has_mesh_admin_pass ? "stored — leave blank to keep" : "required";
-    els.meshHookToken.placeholder = s.has_mesh_hook_token ? "stored — leave blank to keep" : "required";
-    if (s.mdns) {
-      els.meshHookUrl.textContent = `${s.mdns}/api/mesh-hook`;
-    }
-    const meshBits = [];
-    if (s.mesh_sent != null) meshBits.push(`${s.mesh_sent} replies sent`);
+    els.meshAdminPass.placeholder = s.has_mesh_admin_pass
+      ? "stored — leave blank to keep"
+      : "required";
+    els.meshHookToken.placeholder = s.has_mesh_hook_token
+      ? `stored, ${s.mesh_token_len ?? "?"} chars — leave blank to keep`
+      : "required";
+    // Use the origin the browser actually reached us on, not the mDNS name:
+    // the gateway delivers with HTTPClient, which cannot resolve .local.
+    els.meshHookUrl.textContent = `${location.origin}/api/mesh-hook`;
+
+    const meshBits = [`${s.mesh_hooks_ok ?? 0} received`];
+    if (s.mesh_hooks_rejected) meshBits.push(`${s.mesh_hooks_rejected} rejected`);
+    meshBits.push(`${s.mesh_sent ?? 0} replied`);
     if (s.mesh_failed) meshBits.push(`${s.mesh_failed} failed`);
     if (s.mesh_last_error) meshBits.push(s.mesh_last_error);
-    els.meshStatus.textContent = meshBits.length ? meshBits.join(" · ") : "No replies yet";
+    els.meshStatus.textContent = meshBits.join(" · ");
 
     if (s.mdns) els.mdnsHint.textContent = `Dashboard: ${s.mdns}`;
     units = {

@@ -19,6 +19,21 @@ bool dnsActive = false;
 String settingsBody;
 String meshBody;
 
+// strncpy truncates in silence, which cost real debugging time when a 64-char
+// webhook token was quietly stored as 63 and then failed every comparison.
+// Always terminate, and say so on the console when a value did not fit.
+bool assignField(char* dst, size_t dstSize, const char* src, const char* name) {
+  const size_t len = strlen(src);
+  strncpy(dst, src, dstSize - 1);
+  dst[dstSize - 1] = '\0';
+  if (len > dstSize - 1) {
+    Serial.printf("[cfg] %s truncated: %u chars given, %u stored\n", name,
+                  static_cast<unsigned>(len), static_cast<unsigned>(dstSize - 1));
+    return false;
+  }
+  return true;
+}
+
 void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type,
                void* arg, uint8_t* data, size_t len) {
   (void)server;
@@ -191,6 +206,9 @@ void WebUi::setupRoutes() {
     doc["has_mesh_hook_token"] = settings_->meshHookToken[0] != '\0';
     doc["mesh_sent"] = mesh_ ? mesh_->repliesSent() : 0;
     doc["mesh_failed"] = mesh_ ? mesh_->failures() : 0;
+    doc["mesh_hooks_ok"] = mesh_ ? mesh_->hooksAccepted() : 0;
+    doc["mesh_hooks_rejected"] = mesh_ ? mesh_->hooksRejected() : 0;
+    doc["mesh_token_len"] = strlen(settings_->meshHookToken);
     doc["mesh_last_error"] = mesh_ ? mesh_->lastError() : "";
     String out;
     serializeJson(doc, out);
@@ -286,24 +304,28 @@ void WebUi::setupRoutes() {
     if (!doc["mesh_enabled"].isNull()) {
       settings_->meshEnabled = doc["mesh_enabled"].as<bool>();
     }
+    bool fitted = true;
     if (doc["mesh_host"].is<const char*>()) {
-      strncpy(settings_->meshHost, doc["mesh_host"] | "", sizeof(settings_->meshHost) - 1);
+      fitted &= assignField(settings_->meshHost, sizeof(settings_->meshHost),
+                            doc["mesh_host"] | "", "mesh_host");
     }
     if (doc["mesh_keyword"].is<const char*>()) {
-      strncpy(settings_->meshKeyword, doc["mesh_keyword"] | DEFAULT_MESH_KEYWORD,
-              sizeof(settings_->meshKeyword) - 1);
+      fitted &= assignField(settings_->meshKeyword, sizeof(settings_->meshKeyword),
+                            doc["mesh_keyword"] | DEFAULT_MESH_KEYWORD, "mesh_keyword");
     }
     // Secrets follow the wifi_pass convention: blank means "keep what's stored".
     if (doc["mesh_admin_pass"].is<const char*>()) {
       const char* p = doc["mesh_admin_pass"] | "";
       if (p[0] != '\0') {
-        strncpy(settings_->meshAdminPass, p, sizeof(settings_->meshAdminPass) - 1);
+        fitted &= assignField(settings_->meshAdminPass, sizeof(settings_->meshAdminPass), p,
+                              "mesh_admin_pass");
       }
     }
     if (doc["mesh_hook_token"].is<const char*>()) {
       const char* t = doc["mesh_hook_token"] | "";
       if (t[0] != '\0') {
-        strncpy(settings_->meshHookToken, t, sizeof(settings_->meshHookToken) - 1);
+        fitted &= assignField(settings_->meshHookToken, sizeof(settings_->meshHookToken), t,
+                              "mesh_hook_token");
       }
     }
 
@@ -312,7 +334,13 @@ void WebUi::setupRoutes() {
       net_->applyTimezone();
     }
     bool reconnect = doc["apply_wifi"] | false;
-    req->send(200, "application/json", "{\"ok\":true}");
+    if (!fitted) {
+      // Saving still happened; the caller needs to know a value was clipped.
+      req->send(200, "application/json",
+                "{\"ok\":true,\"warning\":\"a value was too long and was truncated\"}");
+    } else {
+      req->send(200, "application/json", "{\"ok\":true}");
+    }
     if (reconnect && settingsHasWifi(*settings_)) {
       delay(300);
       wifi_->applySavedStation();
@@ -338,8 +366,11 @@ void WebUi::setupRoutes() {
       return;
     }
 
-    if (!mesh_ || !mesh_->enabled()) {
-      req->send(503, "application/json", "{\"ok\":false,\"error\":\"mesh bridge disabled\"}");
+    if (!mesh_ || !mesh_->inboundEnabled()) {
+      Serial.println("[mesh] hook rejected: bridge not enabled in settings");
+      if (mesh_) mesh_->noteRejected();
+      req->send(503, "application/json",
+                "{\"ok\":false,\"error\":\"mesh bridge not enabled in settings\"}");
       return;
     }
 
@@ -347,14 +378,29 @@ void WebUi::setupRoutes() {
     // otherwise leave the endpoint open to anything on the LAN.
     const char* expected = settings_->meshHookToken;
     if (expected[0] == '\0') {
-      req->send(403, "application/json", "{\"ok\":false,\"error\":\"no token configured\"}");
+      Serial.println("[mesh] hook rejected: no webhook token configured");
+      mesh_->noteRejected();
+      req->send(403, "application/json", "{\"ok\":false,\"error\":\"no webhook token configured\"}");
       return;
     }
     String presented;
     if (req->hasHeader("Authorization")) {
       presented = req->header("Authorization");
     }
-    if (!presented.startsWith("Bearer ") || presented.substring(7) != expected) {
+    if (!presented.startsWith("Bearer ")) {
+      Serial.println("[mesh] hook rejected: missing or malformed Authorization header");
+      mesh_->noteRejected();
+      req->send(401, "application/json", "{\"ok\":false,\"error\":\"missing bearer token\"}");
+      return;
+    }
+    const String token = presented.substring(7);
+    if (token != expected) {
+      // Lengths alone are enough to spot a truncation mismatch without
+      // putting either secret on the console.
+      Serial.printf("[mesh] hook rejected: token mismatch (presented %u chars, stored %u)\n",
+                    static_cast<unsigned>(token.length()),
+                    static_cast<unsigned>(strlen(expected)));
+      mesh_->noteRejected();
       req->send(401, "application/json", "{\"ok\":false,\"error\":\"bad token\"}");
       return;
     }

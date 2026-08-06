@@ -38,8 +38,12 @@ void MeshBridge::begin(StationSettings* settings) {
   stage_ = Stage::Idle;
 }
 
-bool MeshBridge::enabled() const {
-  return settings_ && settings_->meshEnabled && settings_->meshHost[0] != '\0';
+bool MeshBridge::inboundEnabled() const {
+  return settings_ && settings_->meshEnabled;
+}
+
+bool MeshBridge::canReply() const {
+  return inboundEnabled() && settings_->meshHost[0] != '\0';
 }
 
 String MeshBridge::baseUrl() const {
@@ -51,7 +55,11 @@ bool MeshBridge::matchesKeyword(const char* text) const {
 }
 
 bool MeshBridge::enqueue(const char* from, const char* text, bool direct) {
-  if (!enabled() || !matchesKeyword(text)) {
+  if (!inboundEnabled()) {
+    return false;
+  }
+  hooksAccepted_++;
+  if (!matchesKeyword(text)) {
     return false;
   }
 
@@ -180,7 +188,19 @@ bool MeshBridge::postMessage(const char* text, int to) {
 }
 
 void MeshBridge::loop(const SensorReadings& readings) {
-  if (!enabled() || WiFi.status() != WL_CONNECTED) {
+  if (!inboundEnabled() || WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  if (!canReply()) {
+    // Accepted the trigger but have nowhere to send the answer. Say so once
+    // per queued item rather than silently holding them forever.
+    while (head_ != tail_) {
+      tail_ = (tail_ + 1) % MESH_QUEUE_SLOTS;
+      failed_++;
+      strncpy(lastError_, "no gateway host configured", sizeof(lastError_) - 1);
+      Serial.println("[mesh] trigger received but no gateway host is set");
+    }
     return;
   }
 
